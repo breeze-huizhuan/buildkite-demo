@@ -1,0 +1,88 @@
+# Buildkite pipeline for the demo service. Targets Buildkite hosted Linux agents.
+#
+# Every job starts on a fresh machine, so each step runs its own `npm ci`.
+# A hosted cache volume keeps the npm download cache warm between builds.
+
+env:
+  CI: "true"
+  NPM_CONFIG_CACHE: ".npm-cache"
+
+cache:
+  name: "npm-cache"
+  paths:
+    - ".npm-cache"
+
+steps:
+  - label: ":eslint: Lint"
+    key: lint
+    command: npm ci --prefer-offline && npm run lint
+    timeout_in_minutes: 10
+    plugins:
+      - &node
+        docker#v5.14.0:
+          image: "node:22"
+          propagate-uid-gid: true
+          environment:
+            - HOME=/tmp
+            - CI
+            - NPM_CONFIG_CACHE
+
+  - label: ":typescript: Typecheck"
+    key: typecheck
+    command: npm ci --prefer-offline && npm run typecheck
+    timeout_in_minutes: 10
+    plugins:
+      - *node
+
+  - label: ":vitest: Test"
+    key: test
+    command: npm ci --prefer-offline && npm run test:ci
+    timeout_in_minutes: 10
+    artifact_paths:
+      - "reports/**/*"
+    plugins:
+      - *node
+
+  # Runs even when tests fail, so the annotation always shows what happened.
+  - label: ":memo: Annotate test results"
+    key: annotate
+    depends_on:
+      - step: test
+        allow_failure: true
+    command: .buildkite/scripts/annotate-tests.sh
+    timeout_in_minutes: 5
+
+  # Fails ~50% of the time to show automatic retries. soft_fail keeps an
+  # unlucky streak from turning the whole build red.
+  - label: ":game_die: Flaky check"
+    key: flaky
+    command: .buildkite/scripts/flaky-check.sh
+    timeout_in_minutes: 5
+    soft_fail: true
+    retry:
+      automatic:
+        - exit_status: 1
+          limit: 2
+
+  # Barrier: nothing below starts until everything above has passed.
+  - wait
+
+  - label: ":package: Build"
+    key: build
+    command: npm ci --prefer-offline && npm run build
+    timeout_in_minutes: 10
+    artifact_paths:
+      - "dist/**/*"
+    plugins:
+      - *node
+
+  - label: ":fire: Smoke test"
+    key: smoke
+    depends_on: build
+    branches: "main"
+    command: .buildkite/scripts/smoke-test.sh
+    timeout_in_minutes: 5
+    plugins:
+      - artifacts#v1.10.0:
+          download: "dist/**/*"
+      - *node
