@@ -38,8 +38,10 @@ steps:
     key: test
     command: npm ci --prefer-offline && npm run test:ci
     timeout_in_minutes: 10
+    # "dir/**/*" only matches files inside subfolders, so list top-level files explicitly.
     artifact_paths:
-      - "reports/**/*"
+      - "reports/junit.xml"
+      - "reports/coverage/**/*"
     plugins:
       - *node
 
@@ -72,7 +74,7 @@ steps:
     command: npm ci --prefer-offline && npm run build
     timeout_in_minutes: 10
     artifact_paths:
-      - "dist/**/*"
+      - "dist/*"
     plugins:
       - *node
 
@@ -84,5 +86,5 @@ steps:
     timeout_in_minutes: 5
     plugins:
       - artifacts#v1.10.0:
-          download: "dist/**/*"
+          download: "dist/*"
       - *node

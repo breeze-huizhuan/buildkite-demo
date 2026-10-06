@@ -2,14 +2,15 @@
 # Downloads the test step's reports and posts a summary annotation on the build.
 set -euo pipefail
 
-buildkite-agent artifact download "reports/**/*" . --step test || {
-  buildkite-agent annotate --style error --context tests \
-    "Test step produced no reports. Check the :vitest: Test log."
-  exit 0
-}
-
 junit="reports/junit.xml"
 coverage="reports/coverage/coverage-summary.json"
+
+if ! buildkite-agent artifact download "$junit" . --step test || [[ ! -f "$junit" ]]; then
+  buildkite-agent annotate --style error --context tests \
+    "Test step produced no JUnit report. Check the :vitest: Test log."
+  exit 0
+fi
+buildkite-agent artifact download "$coverage" . --step test || true
 
 # Root <testsuites> element carries the totals.
 root=$(grep -m1 -o '<testsuites[^>]*>' "$junit")
