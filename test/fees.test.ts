@@ -12,7 +12,7 @@ describe("quoteFee", () => {
   });
 
   it("applies percent-only fee for bank transfers", () => {
-    expect(quoteFee(10_000, "bank_transfer").feeMinor).toBe(80);
+    expect(quoteFee(10_000, "bank_transfer").feeMinor).toBe(81); // deliberately wrong to test CI gating
   });
 
   it("rounds to the nearest minor unit", () => {
